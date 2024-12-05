@@ -9,7 +9,7 @@ function App() {
   const [joined, setJoined] = useState(false);
   const [stream, setStream] = useState(null);
   const [users, setUsers] = useState([]);
-  const [screenStream, setScreenStream] = useState(null);  // Track screen stream
+  const [screenStream, setScreenStream] = useState(null);
   const videoRef = useRef(null);
   const chatRef = useRef(null);
 
@@ -42,10 +42,22 @@ function App() {
       chatRef.current.appendChild(messageElem);
     });
 
+    // Listen for screen sharing stream
+    socket.on("screen-shared", (screenStream) => {
+      const screenVideo = document.createElement("video");
+      screenVideo.srcObject = screenStream;
+      screenVideo.autoplay = true;
+      screenVideo.muted = true;
+      screenVideo.style.width = "100%";
+      screenVideo.style.height = "auto";
+      document.body.appendChild(screenVideo);
+    });
+
     return () => {
       socket.off("user-joined");
       socket.off("user-left");
       socket.off("chat-message");
+      socket.off("screen-shared");
     };
   }, []);
 
@@ -82,6 +94,10 @@ function App() {
         if (videoRef.current) {
           videoRef.current.srcObject = screenStream; // Set screen stream to video
         }
+
+        // Emit the screen stream to other users in the room
+        socket.emit("share-screen", screenStream);
+
         // Once screen share ends, restore camera
         screenTrack.onended = () => {
           setStream(null);  // Clear the screen stream
