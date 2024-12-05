@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import Room from "./Room";
+import Room from "./room";
 
 const generateRoomId = () => {
   return Math.random().toString(36).substr(2, 9);
