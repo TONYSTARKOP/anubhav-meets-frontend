@@ -9,11 +9,13 @@ function App() {
   const [joined, setJoined] = useState(false);
   const [stream, setStream] = useState(null);
   const [users, setUsers] = useState([]);
+  const [screenStream, setScreenStream] = useState(null);  // Track screen sharing stream
   const videoRef = useRef(null);
   const videoGridRef = useRef(null);
   const chatRef = useRef(null);
 
   useEffect(() => {
+    // Request camera and microphone access
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((currentStream) => {
@@ -30,6 +32,7 @@ function App() {
     });
   }, []);
 
+  // Create a new room with a random ID
   const createRoom = () => {
     const id = Math.random().toString(36).substr(2, 9);  // Random room ID
     setRoomId(id);
@@ -37,11 +40,13 @@ function App() {
     socket.emit("create-room", id);
   };
 
+  // Join an existing room
   const joinRoom = () => {
     socket.emit("join-room", roomId, username);
     setJoined(true);
   };
 
+  // Handle sending a message in the chat
   const handleSendMessage = (message) => {
     if (message.trim()) {
       const messageElem = document.createElement("p");
@@ -50,18 +55,24 @@ function App() {
     }
   };
 
+  // Handle screen sharing (stop current video and share screen)
   const handleScreenShare = () => {
     navigator.mediaDevices
       .getDisplayMedia({ video: true })
       .then((screenStream) => {
         const screenTrack = screenStream.getTracks()[0];
-        stream.getTracks().forEach((track) => track.stop()); // Stop camera
-        setStream(screenStream);
+        // Stop current camera stream when screen sharing starts
+        stream.getTracks().forEach((track) => track.stop());  
+        setScreenStream(screenStream);  // Set the screen stream
         if (videoRef.current) {
           videoRef.current.srcObject = screenStream;
         }
+        // When screen sharing ends, reset to camera stream
         screenTrack.onended = () => {
-          setStream(null);  // Re-enable the camera when screen sharing ends
+          setStream(null);  // Reset the stream to null to re-enable camera
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;  // Set camera stream back
+          }
         };
       })
       .catch((err) => console.error("Error sharing screen:", err));
@@ -90,6 +101,7 @@ function App() {
       ) : (
         <div>
           <h1>Room: {roomId}</h1>
+          {/* User's own video stream */}
           <video
             ref={videoRef}
             autoPlay
