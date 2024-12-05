@@ -2,7 +2,7 @@ export default {
   server: {
       proxy: {
           "/socket.io": {
-              target: "http://localhost:3000",
+              target: "https://anubhav-meets-backend.onrender.com", // Use your backend URL
               ws: true,
           },
       },
