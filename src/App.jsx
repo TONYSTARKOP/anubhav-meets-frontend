@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5000");  // Replace with your backend URL
+const socket = io("http://localhost:5000"); // Backend URL
 
 function App() {
   const [roomId, setRoomId] = useState("");
@@ -9,32 +9,49 @@ function App() {
   const [joined, setJoined] = useState(false);
   const [stream, setStream] = useState(null);
   const [users, setUsers] = useState([]);
-  const [screenStream, setScreenStream] = useState(null);  // Track screen sharing stream
+  const [screenStream, setScreenStream] = useState(null);  // Track screen stream
   const videoRef = useRef(null);
-  const videoGridRef = useRef(null);
   const chatRef = useRef(null);
 
   useEffect(() => {
-    // Request camera and microphone access
+    // Get user media (camera and microphone)
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((currentStream) => {
         setStream(currentStream);
         if (videoRef.current) {
-          videoRef.current.srcObject = currentStream;
+          videoRef.current.srcObject = currentStream; // Set the stream to the video element
         }
       })
       .catch((err) => console.error("Error accessing media devices:", err));
 
-    // Listen for users joining the room
-    socket.on("user-joined", (username) => {
-      setUsers((prevUsers) => [...prevUsers, username]);
+    // Listening for users joining the room
+    socket.on("user-joined", (newUser) => {
+      setUsers((prevUsers) => [...prevUsers, newUser]);
     });
+
+    // Listening for users leaving the room
+    socket.on("user-left", (leftUser) => {
+      setUsers((prevUsers) => prevUsers.filter((user) => user !== leftUser));
+    });
+
+    // Handle incoming messages
+    socket.on("chat-message", (message) => {
+      const messageElem = document.createElement("p");
+      messageElem.innerText = message;
+      chatRef.current.appendChild(messageElem);
+    });
+
+    return () => {
+      socket.off("user-joined");
+      socket.off("user-left");
+      socket.off("chat-message");
+    };
   }, []);
 
-  // Create a new room with a random ID
+  // Create a new room
   const createRoom = () => {
-    const id = Math.random().toString(36).substr(2, 9);  // Random room ID
+    const id = Math.random().toString(36).substr(2, 9); // Generate random room ID
     setRoomId(id);
     setJoined(true);
     socket.emit("create-room", id);
@@ -46,32 +63,30 @@ function App() {
     setJoined(true);
   };
 
-  // Handle sending a message in the chat
-  const handleSendMessage = (message) => {
+  // Handle sending a message
+  const sendMessage = (message) => {
     if (message.trim()) {
-      const messageElem = document.createElement("p");
-      messageElem.innerText = `${username}: ${message}`;
-      chatRef.current.appendChild(messageElem);
+      socket.emit("chat-message", `${username}: ${message}`);
     }
   };
 
-  // Handle screen sharing (stop current video and share screen)
+  // Handle screen sharing
   const handleScreenShare = () => {
     navigator.mediaDevices
       .getDisplayMedia({ video: true })
       .then((screenStream) => {
         const screenTrack = screenStream.getTracks()[0];
-        // Stop current camera stream when screen sharing starts
-        stream.getTracks().forEach((track) => track.stop());  
-        setScreenStream(screenStream);  // Set the screen stream
+        setScreenStream(screenStream);
+        // Stop camera track while sharing screen
+        stream.getTracks().forEach((track) => track.stop());
         if (videoRef.current) {
-          videoRef.current.srcObject = screenStream;
+          videoRef.current.srcObject = screenStream; // Set screen stream to video
         }
-        // When screen sharing ends, reset to camera stream
+        // Once screen share ends, restore camera
         screenTrack.onended = () => {
-          setStream(null);  // Reset the stream to null to re-enable camera
+          setStream(null);  // Clear the screen stream
           if (videoRef.current) {
-            videoRef.current.srcObject = stream;  // Set camera stream back
+            videoRef.current.srcObject = stream;  // Re-enable camera stream
           }
         };
       })
@@ -79,64 +94,63 @@ function App() {
   };
 
   return (
-    <div style={{ background: "black", color: "white", height: "100vh" }}>
+    <div style={{ backgroundColor: "black", color: "white", minHeight: "100vh" }}>
       {!joined ? (
-        <div style={{ padding: "20px", textAlign: "center" }}>
-          <h1>Anubhav Meets</h1>
+        <div style={{ textAlign: "center", padding: "20px" }}>
+          <h1>Welcome to Anubhav Meets</h1>
           <input
             type="text"
             placeholder="Enter your name"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            style={{ marginBottom: "10px" }}
           />
           <input
             type="text"
             placeholder="Enter Room ID"
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
+            style={{ marginBottom: "10px" }}
           />
-          <button onClick={createRoom}>Create Room</button>
-          <button onClick={joinRoom}>Join Room</button>
+          <div>
+            <button onClick={createRoom} style={{ marginRight: "10px" }}>Create Room</button>
+            <button onClick={joinRoom}>Join Room</button>
+          </div>
         </div>
       ) : (
-        <div>
+        <div style={{ padding: "20px" }}>
           <h1>Room: {roomId}</h1>
-          {/* User's own video stream */}
+          {/* Display user video */}
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
-            style={{ width: "100%", border: "1px solid white" }}
+            style={{ width: "100%", height: "auto", border: "1px solid white", marginBottom: "10px" }}
           />
-          <div ref={videoGridRef} style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
-            <div>
-              <h2>Participants:</h2>
-              <ul>
-                {users.map((user, idx) => (
-                  <li key={idx}>{user}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-          <div>
+          <div style={{ marginTop: "10px", borderTop: "1px solid white", paddingTop: "10px" }}>
+            <h2>Participants</h2>
+            <ul>
+              {users.map((user, index) => (
+                <li key={index}>{user}</li>
+              ))}
+            </ul>
             <button onClick={handleScreenShare}>Share Screen</button>
           </div>
           <div style={{ marginTop: "20px" }}>
-            <div style={{ borderTop: "1px solid white", padding: "10px" }}>
-              <h2>Chat</h2>
-              <div ref={chatRef} style={{ maxHeight: "300px", overflowY: "scroll" }}></div>
-              <input
-                type="text"
-                placeholder="Type a message"
-                onKeyPress={(e) => {
-                  if (e.key === "Enter") {
-                    handleSendMessage(e.target.value);
-                    e.target.value = "";
-                  }
-                }}
-              />
-            </div>
+            <h2>Chat</h2>
+            <div ref={chatRef} style={{ maxHeight: "200px", overflowY: "auto", marginBottom: "10px" }}></div>
+            <input
+              type="text"
+              placeholder="Type a message"
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  sendMessage(e.target.value);
+                  e.target.value = "";
+                }
+              }}
+              style={{ width: "100%", padding: "10px" }}
+            />
           </div>
         </div>
       )}
