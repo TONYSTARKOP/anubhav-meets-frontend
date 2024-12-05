@@ -1,128 +1,57 @@
-import React, { useState, useEffect, useRef } from "react";
-import { io } from "socket.io-client";
+import React, { useState } from "react";
+import Room from "./Room";
 
-const socket = io("http://localhost:5000");
+const generateRoomId = () => {
+  return Math.random().toString(36).substr(2, 9);
+};
 
-function App() {
+const App = () => {
   const [roomId, setRoomId] = useState("");
   const [username, setUsername] = useState("");
   const [joined, setJoined] = useState(false);
-  const [participants, setParticipants] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const localVideoRef = useRef(null);
-  const remoteVideoRefs = useRef({});
-  const messageInputRef = useRef(null);
 
-  const [localStream, setLocalStream] = useState(null);
+  const handleCreateRoom = () => {
+    const newRoomId = generateRoomId();
+    setRoomId(newRoomId);
+    setJoined(true);
+  };
 
-  useEffect(() => {
-    if (joined) {
-      // Initialize camera and microphone
-      navigator.mediaDevices
-        .getUserMedia({ video: true, audio: true })
-        .then((stream) => {
-          setLocalStream(stream);
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = stream;
-          }
-
-          // Send local video stream to server
-          socket.emit("send-video-stream", stream);
-
-          // Join the room
-          socket.emit("join-room", roomId, username);
-        })
-        .catch((err) => console.error("Error accessing media devices:", err));
+  const handleJoinRoom = () => {
+    if (roomId.trim() === "" || username.trim() === "") {
+      alert("Room ID and username are required!");
+      return;
     }
-
-    // Listen for participants update
-    socket.on("participants-update", (users) => setParticipants(users));
-
-    // Listen for incoming chat messages
-    socket.on("receive-message", (message) => {
-      setMessages((prev) => [...prev, message]);
-    });
-
-    // Listen for remote video streams
-    socket.on("receive-video-stream", ({ userId, stream }) => {
-      if (!remoteVideoRefs.current[userId]) {
-        remoteVideoRefs.current[userId] = document.createElement("video");
-        remoteVideoRefs.current[userId].autoplay = true;
-        remoteVideoRefs.current[userId].srcObject = stream;
-        document.getElementById("remote-videos").appendChild(
-          remoteVideoRefs.current[userId]
-        );
-      }
-    });
-
-    return () => {
-      socket.off("participants-update");
-      socket.off("receive-message");
-      socket.off("receive-video-stream");
-    };
-  }, [joined]);
-
-  const handleSendMessage = () => {
-    const message = messageInputRef.current.value;
-    if (message) {
-      socket.emit("send-message", { roomId, username, message });
-      setMessages((prev) => [...prev, `${username}: ${message}`]);
-      messageInputRef.current.value = "";
-    }
+    setJoined(true);
   };
 
   return (
-    <div style={{ color: "white", backgroundColor: "black", minHeight: "100vh", padding: "10px" }}>
+    <div>
       {!joined ? (
-        <div>
+        <div style={{ textAlign: "center", marginTop: "50px" }}>
           <h1>Welcome to Anubhav Meets</h1>
           <input
             type="text"
-            placeholder="Enter your name"
+            placeholder="Enter Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            style={{ marginRight: "10px" }}
           />
-          <input
-            type="text"
-            placeholder="Enter Room ID"
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
-          />
-          <button onClick={() => setJoined(true)}>Join Room</button>
+          <button onClick={handleCreateRoom}>Create Room</button>
+          <div style={{ marginTop: "10px" }}>
+            <input
+              type="text"
+              placeholder="Enter Room ID"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+            />
+            <button onClick={handleJoinRoom}>Join Room</button>
+          </div>
         </div>
       ) : (
-        <div>
-          <h1>Room: {roomId}</h1>
-          <div>
-            <h2>Local Video</h2>
-            <video ref={localVideoRef} autoPlay muted style={{ width: "300px", border: "2px solid white" }} />
-          </div>
-          <div id="remote-videos">
-            <h2>Remote Participants</h2>
-            {/* Remote videos will be appended here dynamically */}
-          </div>
-          <div>
-            <h2>Chat</h2>
-            <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid white", padding: "10px" }}>
-              {messages.map((msg, index) => (
-                <p key={index}>{msg}</p>
-              ))}
-            </div>
-            <input type="text" ref={messageInputRef} placeholder="Type a message" />
-            <button onClick={handleSendMessage}>Send</button>
-          </div>
-          <div>
-            <h2>Participants</h2>
-            <ul>
-              {participants.map((user, index) => (
-                <li key={index}>{user}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
+        <Room roomId={roomId} username={username} />
       )}
     </div>
   );
-}
+};
 
 export default App;
